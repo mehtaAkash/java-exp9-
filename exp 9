@@ -1,0 +1,210 @@
+// ===============================================
+// Project Title: Java Application Using Spring and Hibernate
+// Features: Dependency Injection, CRUD Operations, Transaction Management
+// ===============================================
+
+package com.example.demo;
+
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+import org.hibernate.cfg.Configuration;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.*;
+import org.springframework.orm.hibernate5.HibernateTransactionManager;
+import org.springframework.orm.hibernate5.LocalSessionFactoryBean;
+import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.persistence.*;
+import javax.sql.DataSource;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import java.util.List;
+import java.util.Properties;
+
+// =====================================================
+// ENTITY CLASS
+// =====================================================
+@Entity
+@Table(name = "students")
+class Student {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+    private String name;
+    private String course;
+    private int age;
+
+    public Student() {}
+    public Student(String name, String course, int age) {
+        this.name = name;
+        this.course = course;
+        this.age = age;
+    }
+
+    public int getId() { return id; }
+    public String getName() { return name; }
+    public String getCourse() { return course; }
+    public int getAge() { return age; }
+    public void setName(String name) { this.name = name; }
+    public void setCourse(String course) { this.course = course; }
+    public void setAge(int age) { this.age = age; }
+
+    @Override
+    public String toString() {
+        return "Student [id=" + id + ", name=" + name +
+                ", course=" + course + ", age=" + age + "]";
+    }
+}
+
+// =====================================================
+// DAO LAYER
+// =====================================================
+@Repository
+class StudentDAO {
+
+    @Autowired
+    private SessionFactory sessionFactory;
+
+    public void save(Student student) {
+        Session session = sessionFactory.getCurrentSession();
+        session.saveOrUpdate(student);
+    }
+
+    public Student getById(int id) {
+        Session session = sessionFactory.getCurrentSession();
+        return session.get(Student.class, id);
+    }
+
+    public List<Student> getAll() {
+        Session session = sessionFactory.getCurrentSession();
+        return session.createQuery("from Student", Student.class).list();
+    }
+
+    public void delete(int id) {
+        Session session = sessionFactory.getCurrentSession();
+        Student s = session.get(Student.class, id);
+        if (s != null) session.delete(s);
+    }
+}
+
+// =====================================================
+// SERVICE LAYER
+// =====================================================
+@Service
+class StudentService {
+
+    @Autowired
+    private StudentDAO studentDAO;
+
+    @Transactional
+    public void saveStudent(Student student) {
+        studentDAO.save(student);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Student> getAllStudents() {
+        return studentDAO.getAll();
+    }
+
+    @Transactional(readOnly = true)
+    public Student getStudentById(int id) {
+        return studentDAO.getById(id);
+    }
+
+    @Transactional
+    public void deleteStudent(int id) {
+        studentDAO.delete(id);
+    }
+}
+
+// =====================================================
+// CONTROLLER LAYER
+// =====================================================
+@Component
+class StudentController {
+
+    @Autowired
+    private StudentService service;
+
+    public void runDemo() {
+        System.out.println("=== Adding Students ===");
+        service.saveStudent(new Student("Siva", "Java", 21));
+        service.saveStudent(new Student("Varshith", "AI", 22));
+
+        System.out.println("=== All Students ===");
+        service.getAllStudents().forEach(System.out::println);
+
+        System.out.println("=== Update Student ===");
+        Student s = service.getStudentById(1);
+        if (s != null) {
+            s.setCourse("Full Stack");
+            service.saveStudent(s);
+        }
+
+        System.out.println("=== After Update ===");
+        service.getAllStudents().forEach(System.out::println);
+
+        System.out.println("=== Delete Student ===");
+        service.deleteStudent(2);
+        service.getAllStudents().forEach(System.out::println);
+    }
+}
+
+// =====================================================
+// SPRING CONFIGURATION
+// =====================================================
+@Configuration
+@ComponentScan(basePackages = "com.example.demo")
+@EnableTransactionManagement
+class AppConfig {
+
+    @Bean
+    public DataSource dataSource() {
+        DriverManagerDataSource ds = new DriverManagerDataSource();
+        ds.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        ds.setUrl("jdbc:mysql://localhost:3306/spring_hibernate_db");
+        ds.setUsername("root"); // change if needed
+        ds.setPassword("root"); // change if needed
+        return ds;
+    }
+
+    @Bean
+    public LocalSessionFactoryBean sessionFactory() {
+        LocalSessionFactoryBean factory = new LocalSessionFactoryBean();
+        factory.setDataSource(dataSource());
+        factory.setPackagesToScan("com.example.demo");
+
+        Properties props = new Properties();
+        props.put("hibernate.dialect", "org.hibernate.dialect.MySQL8Dialect");
+        props.put("hibernate.hbm2ddl.auto", "update");
+        props.put("hibernate.show_sql", "true");
+        factory.setHibernateProperties(props);
+
+        return factory;
+    }
+
+    @Bean
+    public HibernateTransactionManager transactionManager() {
+        HibernateTransactionManager txManager = new HibernateTransactionManager();
+        txManager.setSessionFactory(sessionFactory().getObject());
+        return txManager;
+    }
+}
+
+// =====================================================
+// MAIN APPLICATION
+// =====================================================
+public class SpringHibernateCRUD {
+    public static void main(String[] args) {
+        AnnotationConfigApplicationContext context =
+                new AnnotationConfigApplicationContext(AppConfig.class);
+
+        StudentController controller = context.getBean(StudentController.class);
+        controller.runDemo();
+
+        context.close();
+    }
+}
