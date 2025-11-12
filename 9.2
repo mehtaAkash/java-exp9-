@@ -1,0 +1,215 @@
+import org.hibernate.*;
+import org.hibernate.cfg.Configuration;
+
+import javax.persistence.*;
+import java.util.List;
+import java.util.Scanner;
+
+// ================== ENTITY CLASS ==================
+@Entity
+@Table(name = "student")
+class Student {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+
+    @Column(name = "name")
+    private String name;
+
+    @Column(name = "age")
+    private int age;
+
+    @Column(name = "email")
+    private String email;
+
+    public Student() {}
+
+    public Student(String name, int age, String email) {
+        this.name = name;
+        this.age = age;
+        this.email = email;
+    }
+
+    public int getId() { return id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public int getAge() { return age; }
+    public void setAge(int age) { this.age = age; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    @Override
+    public String toString() {
+        return "Student [id=" + id + ", name=" + name +
+                ", age=" + age + ", email=" + email + "]";
+    }
+}
+
+// ================== HIBERNATE UTILITY ==================
+class HibernateUtil {
+
+    private static SessionFactory sessionFactory;
+
+    static {
+        try {
+            Configuration cfg = new Configuration();
+            cfg.configure("hibernate.cfg.xml");
+            cfg.addAnnotatedClass(Student.class);
+            sessionFactory = cfg.buildSessionFactory();
+        } catch (Throwable ex) {
+            System.err.println("SessionFactory creation failed." + ex);
+            throw new ExceptionInInitializerError(ex);
+        }
+    }
+
+    public static SessionFactory getSessionFactory() {
+        return sessionFactory;
+    }
+
+    public static void shutdown() {
+        getSessionFactory().close();
+    }
+}
+
+// ================== DAO CLASS ==================
+class StudentDAO {
+
+    public void saveStudent(Student student) {
+        Transaction transaction = null;
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            transaction = session.beginTransaction();
+            session.save(student);
+            transaction.commit();
+            System.out.println("✅ Student added successfully!");
+        } catch (Exception e) {
+            if (transaction != null) transaction.rollback();
+            e.printStackTrace();
+        }
+    }
+
+    public Student getStudentById(int id) {
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            return session.get(Student.class, id);
+        }
+    }
+
+    public List<Student> getAllStudents() {
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            return session.createQuery("from Student", Student.class).list();
+        }
+    }
+
+    public void updateStudent(Student student) {
+        Transaction transaction = null;
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            transaction = session.beginTransaction();
+            session.update(student);
+            transaction.commit();
+            System.out.println("✅ Student updated successfully!");
+        } catch (Exception e) {
+            if (transaction != null) transaction.rollback();
+            e.printStackTrace();
+        }
+    }
+
+    public void deleteStudent(int id) {
+        Transaction transaction = null;
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            transaction = session.beginTransaction();
+            Student student = session.get(Student.class, id);
+            if (student != null) {
+                session.delete(student);
+                System.out.println("✅ Student deleted successfully!");
+            } else {
+                System.out.println("❌ Student not found!");
+            }
+            transaction.commit();
+        } catch (Exception e) {
+            if (transaction != null) transaction.rollback();
+            e.printStackTrace();
+        }
+    }
+}
+
+// ================== MAIN APPLICATION ==================
+public class HibernateStudentCRUD {
+
+    public static void main(String[] args) {
+
+        StudentDAO dao = new StudentDAO();
+        Scanner sc = new Scanner(System.in);
+        int choice;
+
+        do {
+            System.out.println("\n===== STUDENT CRUD MENU =====");
+            System.out.println("1. Add Student");
+            System.out.println("2. View Student by ID");
+            System.out.println("3. View All Students");
+            System.out.println("4. Update Student");
+            System.out.println("5. Delete Student");
+            System.out.println("0. Exit");
+            System.out.print("Enter choice: ");
+            choice = sc.nextInt();
+
+            switch (choice) {
+                case 1:
+                    sc.nextLine();
+                    System.out.print("Enter name: ");
+                    String name = sc.nextLine();
+                    System.out.print("Enter age: ");
+                    int age = sc.nextInt();
+                    sc.nextLine();
+                    System.out.print("Enter email: ");
+                    String email = sc.nextLine();
+                    dao.saveStudent(new Student(name, age, email));
+                    break;
+
+                case 2:
+                    System.out.print("Enter student ID: ");
+                    int id = sc.nextInt();
+                    Student s = dao.getStudentById(id);
+                    System.out.println(s != null ? s : "❌ Student not found!");
+                    break;
+
+                case 3:
+                    List<Student> students = dao.getAllStudents();
+                    students.forEach(System.out::println);
+                    break;
+
+                case 4:
+                    System.out.print("Enter student ID to update: ");
+                    int uid = sc.nextInt();
+                    sc.nextLine();
+                    Student stu = dao.getStudentById(uid);
+                    if (stu != null) {
+                        System.out.print("Enter new name: ");
+                        stu.setName(sc.nextLine());
+                        System.out.print("Enter new age: ");
+                        stu.setAge(sc.nextInt());
+                        sc.nextLine();
+                        System.out.print("Enter new email: ");
+                        stu.setEmail(sc.nextLine());
+                        dao.updateStudent(stu);
+                    } else {
+                        System.out.println("❌ Student not found!");
+                    }
+                    break;
+
+                case 5:
+                    System.out.print("Enter student ID to delete: ");
+                    dao.deleteStudent(sc.nextInt());
+                    break;
+
+                case 0:
+                    System.out.println("👋 Exiting...");
+                    HibernateUtil.shutdown();
+                    break;
+
+                default:
+                    System.out.println("❌ Invalid choice!");
+            }
+        } while (choice != 0);
+        sc.close();
+    }
+}
